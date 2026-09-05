@@ -226,7 +226,7 @@ function scoreItem(title: string, summary: string) {
       ? "watch"
       : "medium";
   const reason = maybankSpecific
-    ? "Maybank is named in the source record."
+    ? "A monitored institution is named in the source record."
     : domains[0] === "Regulatory Watch"
       ? "Broad regulatory item; route to Compliance for applicability review."
       : `Potential impact detected in ${domains.slice(0, 2).join(" and ")}.`;
@@ -329,7 +329,7 @@ function parseLegislation(html: string, sourceUrl: string) {
       date: currentDate?.iso ?? null,
       dateLabel: currentDate?.label ?? "No amendment date shown",
       type: "Legislation",
-      summary: truncate(blockText || "Primary legislation listed by Bank Negara Malaysia."),
+      summary: truncate(blockText || "Primary legislation listed by BNM."),
     }));
   }
   return items;
@@ -359,7 +359,7 @@ function parseLegislationMarkdown(markdown: string, sourceUrl: string) {
       date: currentDate?.iso ?? null,
       dateLabel: currentDate?.label ?? "No amendment date shown",
       type: "Legislation",
-      summary: truncate(blockText || "Primary legislation listed by Bank Negara Malaysia."),
+      summary: truncate(blockText || "Primary legislation listed by BNM."),
     }));
   });
   return items;
@@ -394,7 +394,7 @@ function parseEnforcement(html: string, sourceUrl: string) {
       date: carriedDate.iso,
       dateLabel: carriedDate.label,
       type: "Enforcement action",
-      summary: summary || "Enforcement action published by Bank Negara Malaysia.",
+      summary: summary || "Enforcement action published by BNM.",
     }));
   }
   return items;
@@ -428,7 +428,7 @@ function parseEnforcementMarkdown(markdown: string, sourceUrl: string) {
       date: currentDate.iso,
       dateLabel: currentDate.label,
       type: "Enforcement action",
-      summary: summary || "Enforcement action published by Bank Negara Malaysia.",
+      summary: summary || "Enforcement action published by BNM.",
     }));
   });
   return items;
@@ -487,7 +487,7 @@ async function fetchPage(url: string): Promise<PageContent> {
   try {
     const { response, content } = await fetchWithTimeout(url, {
       Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "Maybank-Regulatory-Radar/1.0 (on-demand compliance prototype)",
+      "User-Agent": "Regulatory-Radar/1.0 (on-demand compliance prototype)",
     });
     if (response.ok && content.length >= 500 && content.length <= 3_000_000) {
       return { content, format: "html", retrieval: "direct" };
@@ -507,7 +507,7 @@ async function fetchPage(url: string): Promise<PageContent> {
   try {
     const { response, content } = await fetchWithTimeout(relayUrl.toString(), {
       Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "Mozilla/5.0 (compatible; Maybank-Regulatory-Radar/1.0)",
+      "User-Agent": "Mozilla/5.0 (compatible; Regulatory-Radar/1.0)",
     });
     if (!response.ok) throw new Error(`web relay returned HTTP ${response.status}`);
     if (content.length < 500 || content.length > 3_000_000) throw new Error("web relay returned an invalid page");
@@ -520,7 +520,7 @@ async function fetchPage(url: string): Promise<PageContent> {
   try {
     const { response, content } = await fetchWithTimeout(readerUrl, {
       Accept: "text/plain",
-      "User-Agent": "Maybank-Regulatory-Radar/1.0 (public BNM page reader fallback)",
+      "User-Agent": "Regulatory-Radar/1.0 (public BNM page reader fallback)",
     });
     if (!response.ok) throw new Error(`reader returned HTTP ${response.status}`);
     if (content.length < 500 || content.length > 3_000_000) throw new Error("reader returned an invalid page");

@@ -118,11 +118,11 @@ export function RegulatoryRadar() {
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Maybank Regulatory Radar home">
-          <span className="brand-mark" aria-hidden="true">M</span>
+        <a className="brand" href="#top" aria-label="Regulatory Radar home">
+          <span className="brand-mark" aria-hidden="true">R</span>
           <span>
-            <strong>Maybank</strong>
-            <small>Regulatory Radar</small>
+            <strong>Regulatory Radar</strong>
+            <small>Audit intelligence</small>
           </span>
         </a>
         <div className="environment-pill"><span /> Internal audit prototype</div>
@@ -133,7 +133,7 @@ export function RegulatoryRadar() {
           <p className="eyebrow"><RadarIcon /> BNM intelligence monitor</p>
           <h1>Turn regulatory change into an auditable next step.</h1>
           <p className="hero-description">
-            Run an on-demand server-side scan of four Bank Negara Malaysia sources. The radar extracts dated records,
+            Run an on-demand server-side scan of four BNM sources. The radar extracts dated records,
             classifies audit domains, and keeps every finding linked to its original source.
           </p>
           <div className="hero-actions">
@@ -174,8 +174,8 @@ export function RegulatoryRadar() {
             <div className="pulse-radar"><RadarIcon /></div>
             <div>
               <p className="eyebrow">Live request in progress</p>
-              <h2>Scanning Bank Negara Malaysia</h2>
-              <p>Checking policy, legislation, enforcement and Maybank applicability records.</p>
+              <h2>Scanning BNM</h2>
+              <p>Checking policy, legislation, enforcement and FSP records.</p>
             </div>
           </div>
         )}
@@ -280,19 +280,10 @@ export function RegulatoryRadar() {
                 </section>
 
                 <section className="side-card">
-                  <div className="side-heading"><h3>Maybank applicability</h3><span>FSP directory</span></div>
-                  {result.entities.length ? (
-                    <div className="entity-list">
-                      {result.entities.map((entity) => (
-                        <a href={entity.url} target="_blank" rel="noreferrer" key={entity.name}>
-                          <strong>{entity.name}</strong>
-                          <small>{entity.licences.length ? entity.licences.join(" · ") : "BNM-regulated entity"}</small>
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="muted">No Maybank-named entity was extracted in this scan. Check the directory source directly.</p>
-                  )}
+                  <div className="side-heading"><h3>FSP directory</h3><span>Entity checks</span></div>
+                  <p className="muted">
+                    The current BNM directory is checked during every scan for entity and licence applicability.
+                  </p>
                 </section>
 
                 <section className="review-card">
@@ -307,7 +298,7 @@ export function RegulatoryRadar() {
       </section>
 
       <footer>
-        <p>Maybank Regulatory Radar · Internal audit workflow prototype</p>
+        <p>Regulatory Radar · Internal audit workflow prototype</p>
         <p>Public BNM data is fetched only when a user runs a scan.</p>
       </footer>
     </main>

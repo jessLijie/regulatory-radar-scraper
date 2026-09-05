@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Maybank Regulatory Radar",
-  description: "On-demand monitoring of Bank Negara Malaysia regulatory sources.",
+  title: "Regulatory Radar",
+  description: "On-demand monitoring of BNM regulatory sources.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
