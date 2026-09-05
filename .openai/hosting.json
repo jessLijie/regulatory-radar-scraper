@@ -1,9 +1,5 @@
 {
   "project_id": "appgprj_6a9b7c9f73e881918cd58dff2151b5aa",
-  "static": {
-    "directory": "dist",
-    "not_found_handling": "none"
-  },
   "d1": null,
   "r2": null
 }
