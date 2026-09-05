@@ -53,6 +53,12 @@ type Entity = {
   licences: string[];
 };
 
+type PageContent = {
+  content: string;
+  format: "html" | "markdown";
+  retrieval: "direct" | "public-reader";
+};
+
 function decodeHtml(value: string) {
   const named: Record<string, string> = {
     amp: "&",
@@ -115,6 +121,26 @@ function anchorsFromHtml(value: string, fallback: string) {
     if (label) links.push({ href: absoluteUrl(match[2], fallback), label });
   }
   return links;
+}
+
+function linksFromMarkdown(value: string, fallback: string) {
+  const links: Array<{ href: string; label: string }> = [];
+  const pattern = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value))) {
+    const label = match[1].replace(/^!/, "").replace(/[_*`]/g, "").trim();
+    if (label) links.push({ href: absoluteUrl(match[2], fallback), label });
+  }
+  return links;
+}
+
+function textFromMarkdown(value: string) {
+  return decodeHtml(value)
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[#>*_`|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 const MONTHS: Record<string, number> = {
@@ -244,6 +270,38 @@ function parseBanking(html: string, sourceUrl: string) {
   return items;
 }
 
+function parseBankingMarkdown(markdown: string, sourceUrl: string) {
+  const items: RegulatoryItem[] = [];
+  for (const line of markdown.split(/\r?\n/)) {
+    if (!line.trim().startsWith("|") || /^\|\s*(Date|-)/i.test(line)) continue;
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    if (cells.length < 3) continue;
+    const links = linksFromMarkdown(cells[1], sourceUrl);
+    const publishedDates = datesFromText(textFromMarkdown(cells[0]));
+    const allDates = datesFromText(textFromMarkdown(line));
+    const currentDate = allDates[0] ?? publishedDates[0];
+    if (!links.length || !currentDate) continue;
+    const title = links[0].label;
+    const type = textFromMarkdown(cells[2]) || "Policy document";
+    const wasUpdated = Boolean(publishedDates[0] && currentDate.iso > publishedDates[0].iso);
+    const summary = wasUpdated
+      ? `BNM lists linked material updated on ${currentDate.label}; originally issued ${publishedDates[0].label}.`
+      : `${type} listed by BNM on ${currentDate.label}.`;
+    items.push(makeItem({
+      id: `banking-${currentDate.iso}-${title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 110),
+      title,
+      source: "Banking & Islamic Banking",
+      sourceUrl,
+      documentUrl: links[0].href,
+      date: currentDate.iso,
+      dateLabel: currentDate.label,
+      type: wasUpdated ? "Document update" : type,
+      summary,
+    }));
+  }
+  return items;
+}
+
 function parseLegislation(html: string, sourceUrl: string) {
   const items: RegulatoryItem[] = [];
   const pattern = /<h3\b[^>]*>([\s\S]*?)<\/h3>([\s\S]*?)(?=<h3\b|<hr\b|$)/gi;
@@ -267,6 +325,36 @@ function parseLegislation(html: string, sourceUrl: string) {
       summary: truncate(blockText || "Primary legislation listed by Bank Negara Malaysia."),
     }));
   }
+  return items;
+}
+
+function parseLegislationMarkdown(markdown: string, sourceUrl: string) {
+  const items: RegulatoryItem[] = [];
+  const headings = [...markdown.matchAll(/^###\s+(.+)$/gmi)];
+  headings.forEach((heading, index) => {
+    if (heading.index === undefined) return;
+    const blockStart = heading.index + heading[0].length;
+    const blockEnd = headings[index + 1]?.index ?? markdown.length;
+    const block = markdown.slice(blockStart, blockEnd);
+    const headingLinks = linksFromMarkdown(heading[1], sourceUrl);
+    const title = headingLinks[0]?.label ?? textFromMarkdown(heading[1]);
+    if (!title || !/Act\b/i.test(title)) return;
+    const blockText = textFromMarkdown(block);
+    const currentDate = datesFromText(blockText)[0];
+    const links = linksFromMarkdown(block, sourceUrl);
+    const document = links.find((link) => link.href !== sourceUrl && !/legislation\/?$/i.test(link.href));
+    items.push(makeItem({
+      id: `legislation-${title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 110),
+      title,
+      source: "Legislation",
+      sourceUrl,
+      documentUrl: document?.href ?? headingLinks[0]?.href ?? sourceUrl,
+      date: currentDate?.iso ?? null,
+      dateLabel: currentDate?.label ?? "No amendment date shown",
+      type: "Legislation",
+      summary: truncate(blockText || "Primary legislation listed by Bank Negara Malaysia."),
+    }));
+  });
   return items;
 }
 
@@ -305,6 +393,40 @@ function parseEnforcement(html: string, sourceUrl: string) {
   return items;
 }
 
+function parseEnforcementMarkdown(markdown: string, sourceUrl: string) {
+  const items: RegulatoryItem[] = [];
+  const dateStart = /^(?:(?:\d{1,2}\s+)?(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+20\d{2})(?:\s*[–-]\s*(?:(?:\d{1,2}\s+)?(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+20\d{2}))?/gmi;
+  const starts = [...markdown.matchAll(dateStart)];
+  starts.forEach((start, index) => {
+    if (start.index === undefined) return;
+    const end = starts[index + 1]?.index ?? markdown.length;
+    const segment = markdown.slice(start.index, end).trim();
+    const currentDate = datesFromText(start[0])[0];
+    if (!currentDate) return;
+    const afterDate = segment.slice(start[0].length).trim();
+    const boundary = afterDate.search(/\b(?:Section|Paragraph|Part)\b|\bS\d{1,3}\s*\(/i);
+    const institution = textFromMarkdown(boundary > 2 ? afterDate.slice(0, boundary) : afterDate.slice(0, 120))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!institution || institution.length > 180) return;
+    const links = linksFromMarkdown(segment, sourceUrl);
+    const publicNotice = links.find((link) => /P\.N\.|eapn/i.test(`${link.label} ${link.href}`));
+    const summary = truncate(textFromMarkdown(afterDate).replace(institution, "").trim());
+    items.push(makeItem({
+      id: `enforcement-${currentDate.iso}-${institution}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 110),
+      title: `Enforcement action — ${institution}`,
+      source: "Enforcement Actions",
+      sourceUrl,
+      documentUrl: publicNotice?.href ?? sourceUrl,
+      date: currentDate.iso,
+      dateLabel: currentDate.label,
+      type: "Enforcement action",
+      summary: summary || "Enforcement action published by Bank Negara Malaysia.",
+    }));
+  });
+  return items;
+}
+
 function parseDirectory(html: string, sourceUrl: string) {
   const entities: Entity[] = [];
   for (const row of rowsFromHtml(html)) {
@@ -321,26 +443,65 @@ function parseDirectory(html: string, sourceUrl: string) {
   return entities;
 }
 
-async function fetchHtml(url: string) {
+function parseDirectoryMarkdown(markdown: string, sourceUrl: string) {
+  const entities: Entity[] = [];
+  for (const line of markdown.split(/\r?\n/)) {
+    if (!line.trim().startsWith("|")) continue;
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    if (cells.length < 3) continue;
+    const links = linksFromMarkdown(cells[1], sourceUrl);
+    const name = links[0]?.label ?? textFromMarkdown(cells[1]);
+    if (!/(maybank|malayan banking)/i.test(name)) continue;
+    const licences = cells[2].split("*").map((value) => textFromMarkdown(value)).filter(Boolean);
+    entities.push({ name, url: links[0]?.href ?? sourceUrl, licences });
+  }
+  return entities;
+}
+
+async function fetchWithTimeout(url: string, headers: Record<string, string>) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), 22_000);
   try {
     const response = await fetch(url, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml",
-        "User-Agent": "Maybank-Regulatory-Radar/1.0 (on-demand compliance prototype)",
-      },
+      headers,
       redirect: "follow",
       signal: controller.signal,
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`BNM returned HTTP ${response.status}`);
-    const html = await response.text();
-    if (html.length < 500) throw new Error("BNM returned an unexpectedly short page");
-    if (html.length > 3_000_000) throw new Error("BNM response exceeded the safety limit");
-    return html;
+    const content = await response.text();
+    return { response, content };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function fetchPage(url: string): Promise<PageContent> {
+  let directFailure = "Direct request failed";
+  try {
+    const { response, content } = await fetchWithTimeout(url, {
+      Accept: "text/html,application/xhtml+xml",
+      "User-Agent": "Maybank-Regulatory-Radar/1.0 (on-demand compliance prototype)",
+    });
+    if (response.ok && content.length >= 500 && content.length <= 3_000_000) {
+      return { content, format: "html", retrieval: "direct" };
+    }
+    directFailure = response.ok ? "BNM returned an invalid page" : `BNM returned HTTP ${response.status}`;
+  } catch (error) {
+    directFailure = error instanceof Error ? error.message : directFailure;
+  }
+
+  const readerUrl = `https://r.jina.ai/http://${new URL(url).host}${new URL(url).pathname}${new URL(url).search}`;
+  try {
+    const { response, content } = await fetchWithTimeout(readerUrl, {
+      Accept: "text/plain",
+      "User-Agent": "Maybank-Regulatory-Radar/1.0 (public BNM page reader fallback)",
+    });
+    if (!response.ok) throw new Error(`reader returned HTTP ${response.status}`);
+    if (content.length < 500 || content.length > 3_000_000) throw new Error("reader returned an invalid page");
+    return { content, format: "markdown", retrieval: "public-reader" };
+  } catch (error) {
+    const readerFailure = error instanceof Error ? error.message : "reader request failed";
+    throw new Error(`${directFailure}; fallback ${readerFailure}`);
   }
 }
 
@@ -350,11 +511,21 @@ export async function POST() {
   const entities: Entity[] = [];
 
   const results = await Promise.allSettled(SOURCES.map(async (source) => {
-    const html = await fetchHtml(source.url);
-    if (source.id === "banking") return { source, items: parseBanking(html, source.url), entities: [] as Entity[] };
-    if (source.id === "legislation") return { source, items: parseLegislation(html, source.url), entities: [] as Entity[] };
-    if (source.id === "enforcement") return { source, items: parseEnforcement(html, source.url), entities: [] as Entity[] };
-    return { source, items: [] as RegulatoryItem[], entities: parseDirectory(html, source.url) };
+    const page = await fetchPage(source.url);
+    if (source.id === "banking") {
+      const parsed = page.format === "html" ? parseBanking(page.content, source.url) : parseBankingMarkdown(page.content, source.url);
+      return { source, items: parsed, entities: [] as Entity[], retrieval: page.retrieval };
+    }
+    if (source.id === "legislation") {
+      const parsed = page.format === "html" ? parseLegislation(page.content, source.url) : parseLegislationMarkdown(page.content, source.url);
+      return { source, items: parsed, entities: [] as Entity[], retrieval: page.retrieval };
+    }
+    if (source.id === "enforcement") {
+      const parsed = page.format === "html" ? parseEnforcement(page.content, source.url) : parseEnforcementMarkdown(page.content, source.url);
+      return { source, items: parsed, entities: [] as Entity[], retrieval: page.retrieval };
+    }
+    const parsed = page.format === "html" ? parseDirectory(page.content, source.url) : parseDirectoryMarkdown(page.content, source.url);
+    return { source, items: [] as RegulatoryItem[], entities: parsed, retrieval: page.retrieval };
   }));
 
   results.forEach((result, index) => {
@@ -369,7 +540,9 @@ export async function POST() {
         url: source.url,
         ok: true,
         count,
-        message: count ? `${count} records extracted` : "Page reached; no matching records found",
+        message: count
+          ? `${count} records extracted${result.value.retrieval === "public-reader" ? " via reader fallback" : " directly"}`
+          : `Page reached${result.value.retrieval === "public-reader" ? " via reader fallback" : " directly"}; no matching records found`,
       });
     } else {
       const message = result.reason instanceof Error ? result.reason.message : "The source could not be read";
