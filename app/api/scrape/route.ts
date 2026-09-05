@@ -56,7 +56,7 @@ type Entity = {
 type PageContent = {
   content: string;
   format: "html" | "markdown";
-  retrieval: "direct" | "public-reader";
+  retrieval: "direct" | "public-relay" | "public-reader";
 };
 
 function decodeHtml(value: string) {
@@ -104,6 +104,13 @@ function absoluteUrl(value: string | undefined, fallback: string) {
   if (!value) return fallback;
   try {
     const parsed = new URL(decodeHtml(value), BNM_ORIGIN);
+    if (parsed.hostname === "www-bnm-gov-my.translate.goog") {
+      const original = new URL(`${BNM_ORIGIN}${parsed.pathname}`);
+      parsed.searchParams.forEach((parameterValue, parameterName) => {
+        if (!parameterName.startsWith("_x_tr_")) original.searchParams.set(parameterName, parameterValue);
+      });
+      return original.toString();
+    }
     return parsed.hostname === "www.bnm.gov.my" || parsed.hostname === "bnm.gov.my"
       ? parsed.toString()
       : fallback;
@@ -490,6 +497,25 @@ async function fetchPage(url: string): Promise<PageContent> {
     directFailure = error instanceof Error ? error.message : directFailure;
   }
 
+  const original = new URL(url);
+  const relayUrl = new URL(`https://www-bnm-gov-my.translate.goog${original.pathname}`);
+  original.searchParams.forEach((parameterValue, parameterName) => relayUrl.searchParams.set(parameterName, parameterValue));
+  relayUrl.searchParams.set("_x_tr_sl", "ms");
+  relayUrl.searchParams.set("_x_tr_tl", "en");
+  relayUrl.searchParams.set("_x_tr_hl", "en");
+  let relayFailure = "web relay request failed";
+  try {
+    const { response, content } = await fetchWithTimeout(relayUrl.toString(), {
+      Accept: "text/html,application/xhtml+xml",
+      "User-Agent": "Mozilla/5.0 (compatible; Maybank-Regulatory-Radar/1.0)",
+    });
+    if (!response.ok) throw new Error(`web relay returned HTTP ${response.status}`);
+    if (content.length < 500 || content.length > 3_000_000) throw new Error("web relay returned an invalid page");
+    return { content, format: "html", retrieval: "public-relay" };
+  } catch (error) {
+    relayFailure = error instanceof Error ? error.message : relayFailure;
+  }
+
   const readerUrl = `https://r.jina.ai/http://${new URL(url).host}${new URL(url).pathname}${new URL(url).search}`;
   try {
     const { response, content } = await fetchWithTimeout(readerUrl, {
@@ -501,7 +527,7 @@ async function fetchPage(url: string): Promise<PageContent> {
     return { content, format: "markdown", retrieval: "public-reader" };
   } catch (error) {
     const readerFailure = error instanceof Error ? error.message : "reader request failed";
-    throw new Error(`${directFailure}; fallback ${readerFailure}`);
+    throw new Error(`${directFailure}; ${relayFailure}; reader ${readerFailure}`);
   }
 }
 
@@ -541,8 +567,8 @@ export async function POST() {
         ok: true,
         count,
         message: count
-          ? `${count} records extracted${result.value.retrieval === "public-reader" ? " via reader fallback" : " directly"}`
-          : `Page reached${result.value.retrieval === "public-reader" ? " via reader fallback" : " directly"}; no matching records found`,
+          ? `${count} records extracted${result.value.retrieval === "direct" ? " directly" : " via web relay"}`
+          : `Page reached${result.value.retrieval === "direct" ? " directly" : " via web relay"}; no matching records found`,
       });
     } else {
       const message = result.reason instanceof Error ? result.reason.message : "The source could not be read";
