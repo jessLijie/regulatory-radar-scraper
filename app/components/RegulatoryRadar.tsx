@@ -125,7 +125,7 @@ export function RegulatoryRadar() {
             <small>Audit intelligence</small>
           </span>
         </a>
-        <a href="/mapper" className="environment-pill" style={{textDecoration:"none"}}><span /> Open Control Match Lab →</a>
+        <a href="/mapper" className="environment-pill" style={{textDecoration:"none"}}><span /> Open policy checker →</a>
       </header>
 
       <section className="hero" id="top">

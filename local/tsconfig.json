@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "main.tsx",
+    "../app/mapper/Mapper.tsx",
+    "../app/mapper/read-policy.ts"
+  ],
+  "exclude": ["../node_modules", "../dist", "../dist-local"]
+}

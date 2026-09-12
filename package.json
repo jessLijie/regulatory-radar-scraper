@@ -6,20 +6,29 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "local": "npm run build:local && node local/server.mjs",
+    "local:dev": "node local/server.mjs --dev",
+    "build:local": "vite build --config local/vite.config.mjs",
+    "test:local": "node --test tests/local-analysis.test.mjs",
+    "test:local:live": "node tests/local-live.mjs",
+    "typecheck:local": "tsc --noEmit -p local/tsconfig.json",
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test:mapper": "node --test tests/mapper.test.mjs",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test:mapper": "npm run test:local",
+    "test": "npm run test:local && npm run typecheck:local && npm run build:local",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@langchain/core": "^1.2.11",
+    "@langchain/ollama": "^1.3.0",
     "drizzle-orm": "0.45.2",
     "pdfjs-dist": "^6.3.289",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "react-loading-skeleton": "3.5.0"
+    "react-loading-skeleton": "3.5.0",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
@@ -44,6 +53,9 @@
     "vinext": "1.0.0-beta.2",
     "vite": "8.0.13",
     "wrangler": "4.92.0"
+  },
+  "overrides": {
+    "ws": "8.21.3"
   },
   "type": "module"
 }

@@ -1,54 +1,461 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { createDemo, demoProposals, demoRequirements } from "./demo";
-import { compareVersions, controlsFromCSV, currentDecision, fingerprint, lexicalMapping, matrixCSV, metrics, requirementsFromText, type Requirement, type Workspace } from "./model";
+import { useEffect, useRef, useState } from "react";
 import { readPolicy } from "./read-policy";
-import { Icon, Modal, download } from "./ui";
-import Workbench from "./Workbench";
-import WorkspaceViews from "./WorkspaceViews";
-import { Guide, ImportForm } from "./dialogs";
 
-export type View="workbench"|"documents"|"controls"|"coverage"|"changes"|"activity";
-const STORE="regulatory-radar-mapper-v1";
-const navigation:{id:View;label:string;icon:string}[]=[{id:"workbench",label:"Mapping workbench",icon:"layers"},{id:"documents",label:"Policy documents",icon:"file"},{id:"controls",label:"Control library",icon:"shield"},{id:"coverage",label:"Coverage matrix",icon:"grid"},{id:"changes",label:"Policy changes",icon:"branch"},{id:"activity",label:"Review history",icon:"clock"}];
-const titles:Record<View,[string,string]>={workbench:["Mapping workbench","Connect every requirement to evidence. Make the final call."],documents:["Policy documents","Source passages, document identity and version history."],controls:["Control library","The activities your requirements are being compared against."],coverage:["Coverage matrix","Proposed matches are separate from auditor-approved coverage."],changes:["Policy changes","See what changed, and which decisions need another look."],activity:["Review history","A record of this browser’s mapping runs and review decisions."]};
-export function auditEvent(action:string,detail:string){return{id:crypto.randomUUID(),at:new Date().toISOString(),action,detail};}
-export default function Mapper(){
-  const [ws,setWs]=useState<Workspace>(()=>createDemo());const [hydrated,setHydrated]=useState(false);const [view,setView]=useState<View>("workbench");const [selectedId,setSelectedId]=useState("REQ-001");
-  const [modal,setModal]=useState<"import"|"revision"|"guide"|"reset"|"export"|null>(null);const [notice,setNotice]=useState("");const [running,setRunning]=useState(false);const [runStep,setRunStep]=useState(0);const [storageError,setStorageError]=useState(false);
-  useEffect(()=>{try{const raw=localStorage.getItem(STORE);if(raw){const data=JSON.parse(raw);if(data.schema===1&&Array.isArray(data.workspace?.requirements)&&data.workspace.requirements.every((r:Requirement)=>typeof r.id==="string"&&typeof r.text==="string")&&Array.isArray(data.workspace.controls)&&Array.isArray(data.workspace.proposals)&&Array.isArray(data.workspace.events)&&data.workspace.decisions){setWs(data.workspace);setSelectedId(data.workspace.requirements[0]?.id??"");}}}catch{setNotice("The saved browser session could not be read. A fresh demo is ready.");}setHydrated(true);},[]);
-  useEffect(()=>{if(hydrated)try{localStorage.setItem(STORE,JSON.stringify({schema:1,workspace:ws}));setStorageError(false);}catch{setStorageError(true);}},[ws,hydrated]);
-  useEffect(()=>{if(!notice)return;const id=setTimeout(()=>setNotice(""),6500);return()=>clearTimeout(id);},[notice]);
-  const stat=useMemo(()=>metrics(ws),[ws]);const changes=useMemo(()=>ws.baseline?compareVersions(ws.baseline,ws.requirements):[],[ws.baseline,ws.requirements]);
-  function openRequirement(id:string){setSelectedId(id);setView("workbench");}
-  async function runMapping(){if(running)return;setRunning(true);setRunStep(0);setView("workbench");for(let i=0;i<3;i++){setRunStep(i);await new Promise(resolve=>setTimeout(resolve,450));}setWs(prev=>({...prev,proposals:prev.mode==="demo"?demoProposals(prev.requirements):lexicalMapping(prev.requirements,prev.controls),events:[...prev.events,auditEvent("Mapping completed",`${prev.requirements.length} requirements compared with ${prev.controls.length} controls using ${prev.mode==="demo"?"authored demo fixtures":"the local lexical matcher"}. Review decisions retained.`)]}));setRunning(false);setNotice(ws.mode==="demo"?"Sample mapping replayed. Your review decisions are retained.":"Local matching complete. Candidates need your assessment.");}
-  function applyVersion(next:Requirement[],name:string,version:string,hashes?:{rawHash:string;textHash:string}){
-    const diff=compareVersions(ws.requirements,next);const kept:Workspace["decisions"]={};let retained=0;
-    for(const change of diff)if(change.kind==="unchanged"&&change.before&&change.after){const d=currentDecision(ws,change.before);if(d){kept[change.after.id]={...d,requirementId:change.after.id,fingerprint:fingerprint(change.after,ws.controls.find(c=>c.id===d.controlId))};retained++;}}
-    setWs(prev=>({...prev,name,version,mode:hashes?"imported":prev.mode,baseline:prev.requirements,baselineName:`${prev.name} v${prev.version}`,requirements:next,decisions:kept,proposals:hashes?lexicalMapping(next,prev.controls):demoProposals(next),...hashes,history:[...(prev.history??[]),{version:prev.version,name:prev.name,capturedAt:new Date().toISOString(),requirements:prev.requirements,controls:prev.controls,proposals:prev.proposals,decisions:prev.decisions,rawHash:prev.rawHash,textHash:prev.textHash}],events:[...prev.events,auditEvent("Policy version compared",`v${prev.version} → v${version}. ${diff.filter(c=>c.kind==="modified").length} modified, ${diff.filter(c=>c.kind==="added").length} added, ${diff.filter(c=>c.kind==="removed").length} removed. ${retained} unchanged decisions carried forward; changed mappings require review.`)]}));setSelectedId(next[0]?.id??"");setView("changes");setNotice("Comparison ready. Changed requirements need a new decision.");
+type Finding = {
+  title: string;
+  status: "covered" | "partial" | "gap" | "review";
+  policyQuote: string;
+  controlQuote: string;
+  reason: string;
+  nextStep: string;
+  evidenceVerified: boolean;
+};
+type Report = {
+  findings: Finding[];
+  model: string;
+  elapsedSeconds: number;
+  createdAt: string;
+  policyHash: string;
+  controlsHash: string;
+  warnings: string[];
+};
+type Connection = { ready: boolean; model: string; message: string };
+const labels = {
+  covered: "Covered on paper",
+  partial: "Partial match",
+  gap: "No matching control",
+  review: "Needs verification",
+};
+const samplePolicy =
+  "1. All employee accounts must use multi-factor authentication.\n\n2. Privileged access must be reviewed at least quarterly.\n\n3. Security incidents must be reported to the security team within 24 hours.";
+const sampleControls =
+  "C-01: Multi-factor authentication is enforced for all employee accounts.\n\nC-02: The IT manager reviews privileged access annually.\n\nC-03: Backups are completed every night.";
+
+export default function Mapper() {
+  const [policy, setPolicy] = useState("");
+  const [controls, setControls] = useState("");
+  const [names, setNames] = useState(["Pasted policy", "Pasted controls"]);
+  const [connection, setConnection] = useState<Connection>({
+    ready: false,
+    model: "Ollama",
+    message: "Checking local model…",
+  });
+  const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [error, setError] = useState("");
+  const [report, setReport] = useState<Report | null>(null);
+  const [gapsOnly, setGapsOnly] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+  const results = useRef<HTMLElement | null>(null);
+
+  async function checkConnection() {
+    try {
+      const response = await fetch("/api/local/status", {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (
+        !response.ok ||
+        !response.headers.get("content-type")?.includes("application/json")
+      )
+        throw new Error();
+      setConnection(await response.json());
+    } catch {
+      setConnection({
+        ready: false,
+        model: "Ollama",
+        message:
+          "Open the local app with npm run local. This hosted page cannot connect to your computer’s model.",
+      });
+    }
   }
-  function loadRevision(){if(ws.mode==="demo"&&ws.version==="1.0")applyVersion(demoRequirements("2.0"),ws.name,"2.0");else setModal("revision");}
-  function exportMatrix(){download("control-mapping-matrix.csv",matrixCSV(ws),"text/csv;charset=utf-8");setNotice("Mapping matrix exported with review status and source references.");}
-  function exportEvidence(){download("control-match-evidence.json",JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),prototype:true,engine:ws.mode==="demo"?"Authored fixtures, not live AI":"Local lexical matching, not live AI",storage:"Browser-local demonstration; not a tamper-evident audit record",metrics:stat,...ws},null,2),"application/json");setNotice("Evidence packet exported with sources, decisions and local history.");}
-  async function importFiles(policyFile:File,controlsFile:File|null){
-    const parsed=await readPolicy(policyFile);if(modal==="revision"&&parsed.rawHash===ws.rawHash)throw new Error("This file is an exact duplicate. No new version was created.");if(modal==="revision"&&parsed.textHash===ws.textHash)throw new Error("The extracted text is unchanged. This is a formatting or metadata update, not a new requirement version.");
-    const version=modal==="revision"?`${(parseInt(ws.version)||1)+1}.0`:"1.0";const reqs=requirementsFromText(parsed.text,policyFile.name,version);
-    if(modal==="revision")applyVersion(reqs,ws.name,version,{rawHash:parsed.rawHash,textHash:parsed.textHash});
-    else{if(!controlsFile)throw new Error("Choose a control library CSV.");if(controlsFile.size>2*1024*1024)throw new Error("Choose a control CSV smaller than 2 MB.");const controls=controlsFromCSV(await controlsFile.text(),controlsFile.name);setWs({name:policyFile.name.replace(/\.[^.]+$/,""),version,mode:"imported",requirements:reqs,controls,proposals:lexicalMapping(reqs,controls),decisions:{},events:[auditEvent("Files imported",`${policyFile.name}: ${reqs.length} candidate requirements. ${controlsFile.name}: ${controls.length} controls. Local extraction and matching rules used.`)],baseline:null,rawHash:parsed.rawHash,textHash:parsed.textHash});setSelectedId(reqs[0].id);setView("workbench");setNotice("Files imported. Validate the extracted requirements and suggested candidates.");}setModal(null);
+  useEffect(() => {
+    void checkConnection();
+    return () => abort.current?.abort();
+  }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const start = Date.now();
+    const timer = setInterval(
+      () => setElapsed(Math.floor((Date.now() - start) / 1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [busy]);
+
+  function edit(value: string, kind: "policy" | "controls") {
+    (kind === "policy" ? setPolicy : setControls)(value);
+    setReport(null);
+    setError("");
+    setNames((old) =>
+      kind === "policy"
+        ? ["Pasted policy", old[1]]
+        : [old[0], "Pasted controls"],
+    );
   }
-  return <div className="ml-app"><aside className="ml-nav"><a href="/" className="ml-brand"><span className="ml-logo">r.</span><span>Regulatory<br/>Radar</span></a><p className="ml-nav-label">AUDIT WORKSPACE</p><nav aria-label="Audit navigation">{navigation.map(item=><button key={item.id} className={`ml-nav-item ${view===item.id?"active":""}`} aria-current={view===item.id?"page":undefined} onClick={()=>setView(item.id)}><Icon name={item.icon}/><span>{item.label}</span>{item.id==="changes"&&changes.some(c=>c.kind!=="unchanged")&&<small>{changes.filter(c=>c.kind!=="unchanged").length}</small>}</button>)}</nav><a className="ml-nav-item ml-radar-link" href="/"><Icon name="radar"/>Regulatory radar<Icon name="arrow"/></a><div className="ml-nav-help"><span className="ml-kicker">TAKE IT FOR A SPIN</span><p>One policy. Fifty controls.<br/>Your judgment in the loop.</p><button onClick={()=>setModal("guide")}>Try the demo story <Icon name="arrow"/></button></div><div className="ml-nav-bottom"><span className="ml-avatar">DA</span><div>Demo auditor<small>Personal workspace</small></div></div></aside>
-  <div className="ml-main"><header className="ml-top"><span>Audit workspace <span className="ml-divider">/</span> <strong>Control Match Lab</strong></span><div className="ml-top-right"><span className="ml-badge neutral"><Icon name="spark"/>{ws.mode==="demo"?"Sample AI suggestions":"Local rule-based matching"}</span><button className="ml-icon-button" aria-label="About this prototype" onClick={()=>setModal("guide")}><Icon name="info"/></button></div></header>
-  <main className="ml-content"><div className="ml-page-heading"><div><div className="ml-kicker">POLICY → CONTROL → EVIDENCE</div><h1>{titles[view][0]}<span className="ml-title-dot">.</span></h1><p>{titles[view][1]}</p></div><div className="ml-action-group"><button className="ml-button" onClick={()=>setModal("export")}><Icon name="download"/>Export</button><button className="ml-button primary" disabled={running} onClick={runMapping}><Icon name={running?"refresh":"spark"} className={running?"ml-spinning":""}/>{running?"Mapping…":ws.mode==="demo"?"Run demo mapping":"Run local mapping"}</button></div></div>
-  <div className="ml-scenario"><span className="ml-file-icon"><Icon name="file"/></span><div><strong>{ws.name}</strong><span>v{ws.version} · {ws.mode==="demo"?"Synthetic demonstration policy":"Your imported policy · candidate requirements"}</span></div><span className="ml-badge neutral">{stat.total} requirements</span><span className="ml-badge neutral">{ws.controls.length} controls</span><button className="ml-text-button" onClick={()=>setModal("import")}><Icon name="upload"/>Import files</button></div>
-  {running&&<div className="ml-progress" role="status"><div className="ml-progress-bar" style={{width:`${(runStep+1)*33.33}%`}}/><span>{ws.mode==="demo"?["Loading the authored policy fixture…","Linking the sample evidence pairs…","Replaying labelled suggestions…"][runStep]:["Reading extracted sentences…","Ranking controls by shared terms…","Preparing candidates for assessment…"][runStep]}</span></div>}
-  {storageError&&<div className="ml-warning" role="alert">Browser storage is unavailable or full. Export your evidence to keep the current work.</div>}
-  <section className="ml-stats" aria-label="Mapping statistics">{[{label:"Requirements",value:stat.total,note:`${new Set(ws.requirements.map(r=>r.domain)).size} audit domains`,icon:"file"},{label:"Proposed full matches",value:stat.fullProposed,note:"Suggestions, not approved coverage",icon:"link"},{label:"Potential gaps",value:stat.gaps,note:"No matched control · review required",icon:"search"},{label:"Approved coverage",value:`${stat.coverage}%`,note:`${stat.fullApproved} of ${stat.total} approved as full matches`,icon:"shield"}].map(s=><div className="ml-stat" key={s.label}><span>{s.label}</span><Icon name={s.icon}/><strong>{s.value}</strong><small>{s.note}</small>{s.label==="Approved coverage"&&<div className="ml-stat-track"><span style={{width:`${stat.coverage}%`}}/></div>}</div>)}</section>
-  {view==="workbench"?<Workbench ws={ws} setWs={setWs} selectedId={selectedId} setSelectedId={setSelectedId} running={running} notify={setNotice} openMatrix={()=>setView("coverage")}/>:<WorkspaceViews view={view} ws={ws} openRequirement={openRequirement} loadRevision={loadRevision} exportMatrix={exportMatrix} exportEvidence={exportEvidence}/>}
-  </main><div className="ml-bottom-note"><span><Icon name="shield"/>{ws.mode==="demo"?"Synthetic data · AI suggestions are illustrative":"Your files stay in this browser · No live AI connected"}</span><span>{hydrated?(storageError?"Session only":"Saved in this browser"):"Loading session…"}<button className="ml-text-button" onClick={()=>setModal("reset")}>Reset demo</button></span></div></div>
-  {notice&&<div className="ml-toast" role="status"><Icon name="info"/>{notice}<button className="ml-icon-button" aria-label="Dismiss notification" onClick={()=>setNotice("")}><Icon name="x"/></button></div>}
-  {(modal==="import"||modal==="revision")&&<ImportForm revision={modal==="revision"} name={ws.name} close={()=>setModal(null)} importFiles={importFiles} exportEvidence={exportEvidence}/>}
-  {modal==="guide"&&<Modal title="A five-minute demo story" close={()=>setModal(null)}><Guide start={()=>{setModal(null);setView("workbench");}}/></Modal>}
-  {modal==="export"&&<Modal title="Export your review" close={()=>setModal(null)}><div className="ml-export-options"><button onClick={()=>{exportMatrix();setModal(null);}}><span className="ml-large-file"><Icon name="grid"/></span><span><strong>Mapping matrix</strong><small>CSV with requirements, sources, proposals and decisions.</small></span><Icon name="download"/></button><button onClick={()=>{exportEvidence();setModal(null);}}><span className="ml-large-file"><Icon name="file"/></span><span><strong>Full evidence packet</strong><small>JSON with source passages, versions and review history.</small></span><Icon name="download"/></button></div></Modal>}
-  {modal==="reset"&&<Modal title="Start a fresh demo?" close={()=>setModal(null)}><div className="ml-reset-body"><p>This replaces the current browser workspace and its review decisions with the original sample policy. Export your evidence first if you want to keep it.</p><div className="ml-modal-actions"><button className="ml-button" onClick={exportEvidence}>Export current work</button><button className="ml-button primary" onClick={()=>{setWs(createDemo());setSelectedId("REQ-001");setView("workbench");setModal(null);setNotice("Fresh demo loaded. Ready for your first review.");}}>Reset to sample v1.0</button></div></div></Modal>}
-  </div>;
+  async function upload(file: File | undefined, kind: "policy" | "controls") {
+    if (!file) return;
+    setReading(true);
+    setError("");
+    try {
+      if (file.size > 5 * 1024 * 1024)
+        throw new Error("Choose a file smaller than 5 MB.");
+      const text =
+        kind === "controls" && /\.csv$/i.test(file.name)
+          ? await file.text()
+          : (await readPolicy(file)).text;
+      if (!text.trim()) throw new Error("The file contains no readable text.");
+      if (text.length > 4000)
+        throw new Error(
+          "This small local model works with short excerpts. Paste up to 4,000 characters from your document instead.",
+        );
+      edit(text, kind);
+      setNames((old) =>
+        kind === "policy" ? [file.name, old[1]] : [old[0], file.name],
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read the file.");
+    } finally {
+      setReading(false);
+    }
+  }
+  async function analyze() {
+    setBusy(true);
+    setElapsed(0);
+    setError("");
+    setReport(null);
+    const controller = new AbortController();
+    abort.current = controller;
+    try {
+      const response = await fetch("/api/local/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ policy, controls }),
+        signal: controller.signal,
+      });
+      const body = await response.json();
+      if (!response.ok)
+        throw new Error(
+          body.error ||
+            "Analysis failed. Check that Ollama is running and try again.",
+        );
+      setReport(body);
+      setGapsOnly(false);
+      setTimeout(
+        () =>
+          results.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          }),
+        100,
+      );
+    } catch (e) {
+      setError(
+        controller.signal.aborted
+          ? "Analysis cancelled. Your inputs are still here."
+          : e instanceof Error
+            ? e.message
+            : "Analysis failed.",
+      );
+    } finally {
+      setBusy(false);
+      abort.current = null;
+    }
+  }
+  function exportReport() {
+    if (!report) return;
+    const file = new Blob(
+      [
+        JSON.stringify(
+          {
+            ...report,
+            sources: { policy: names[0], controls: names[1] },
+            disclaimer:
+              "AI-generated comparison of supplied text only. Human review required; not an assessment of operating effectiveness.",
+          },
+          null,
+          2,
+        ),
+      ],
+      { type: "application/json" },
+    );
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "regulatory-radar-review.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const shown =
+    report?.findings.filter((f) => !gapsOnly || f.status !== "covered") || [];
+  const inputTooLong = policy.length > 4000 || controls.length > 4000;
+  return (
+    <div className="rr-local">
+      <header className="rr-header">
+        <div className="rr-brand">
+          <span className="rr-mark">R</span>
+          <strong>Regulatory Radar</strong>
+          <span className="rr-divider" />
+          <span>Policy checker</span>
+        </div>
+        <span className="rr-local-tag">LOCAL AI</span>
+      </header>
+      <main className="rr-main">
+        <div className="rr-heading">
+          <div>
+            <h1>What’s missing from your controls?</h1>
+            <p>
+              Compare a short policy with what you currently do. Review the
+              differences, with evidence.
+            </p>
+          </div>
+          <button
+            className="rr-text-button"
+            disabled={busy || reading}
+            onClick={() => {
+              setPolicy(samplePolicy);
+              setControls(sampleControls);
+              setNames([
+                "Sample policy (fictional)",
+                "Sample controls (fictional)",
+              ]);
+              setReport(null);
+              setError("");
+            }}
+          >
+            Try sample inputs
+          </button>
+        </div>
+        <div className="rr-inputs">
+          {(["policy", "controls"] as const).map((kind, index) => (
+            <section className="rr-input-panel" key={kind}>
+              <div className="rr-panel-title">
+                <h2>
+                  <span>{index + 1}</span>
+                  {kind === "policy" ? "What’s required" : "What’s in place"}
+                </h2>
+                <label
+                  className={`rr-upload ${busy || reading ? "rr-disabled" : ""}`}
+                >
+                  Upload {kind === "policy" ? "policy" : "controls"}
+                  <input
+                    type="file"
+                    aria-label={`Upload ${kind}`}
+                    accept={
+                      kind === "policy" ? ".pdf,.txt,.md" : ".pdf,.txt,.md,.csv"
+                    }
+                    disabled={busy || reading}
+                    onChange={(e) => {
+                      void upload(e.target.files?.[0], kind);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <label className="rr-sr-only" htmlFor={`rr-${kind}`}>
+                {kind === "policy" ? "Policy text" : "Controls text"}
+              </label>
+              <textarea
+                id={`rr-${kind}`}
+                value={kind === "policy" ? policy : controls}
+                onChange={(e) => edit(e.target.value, kind)}
+                disabled={busy || reading}
+                aria-invalid={
+                  (kind === "policy" ? policy : controls).length > 4000
+                }
+                placeholder={
+                  kind === "policy"
+                    ? "Paste a policy excerpt here.\n\nFor example: Privileged access must be reviewed at least quarterly."
+                    : "Paste your existing controls here.\n\nFor example: The IT manager reviews privileged access annually."
+                }
+              />
+              <div className="rr-input-meta">
+                <span>
+                  {names[index].startsWith("Pasted")
+                    ? kind === "policy"
+                      ? "PDF, TXT or Markdown"
+                      : "PDF, TXT, Markdown or CSV"
+                    : names[index]}
+                </span>
+                <span>
+                  {(kind === "policy"
+                    ? policy
+                    : controls
+                  ).length.toLocaleString()}{" "}
+                  / 4,000
+                </span>
+              </div>
+            </section>
+          ))}
+        </div>
+        <div className="rr-action-row">
+          <div className="rr-connection">
+            <span
+              className={`rr-status-light ${connection.ready ? "ready" : ""}`}
+            />
+            <div>
+              <strong>
+                {connection.ready
+                  ? `${connection.model} · Ready`
+                  : "Local model not ready"}
+              </strong>
+              <p>
+                {connection.ready
+                  ? "Documents stay on this computer. Nothing is saved automatically."
+                  : connection.message}
+              </p>
+            </div>
+            {!connection.ready && (
+              <button className="rr-text-button" onClick={checkConnection}>
+                Recheck
+              </button>
+            )}
+          </div>
+          <div className="rr-run-actions">
+            {busy && (
+              <button
+                className="rr-text-button"
+                onClick={() => abort.current?.abort()}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              className="rr-analyze"
+              disabled={
+                !connection.ready ||
+                !policy.trim() ||
+                !controls.trim() ||
+                inputTooLong ||
+                busy ||
+                reading
+              }
+              onClick={analyze}
+            >
+              {reading
+                ? "Reading file…"
+                : busy
+                  ? "Analyzing…"
+                  : "Analyze with local AI"}
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+        {busy && (
+          <div className="rr-progress" role="status">
+            <span className="rr-spinner" />
+            <div>
+              <strong>Ollama is comparing your documents · {elapsed}s</strong>
+              <p>
+                Local analysis can take a few minutes. The first run also loads
+                the model into memory.
+              </p>
+            </div>
+          </div>
+        )}
+        {(error || inputTooLong) && (
+          <div className="rr-error" role="alert">
+            {inputTooLong
+              ? "Shorten each excerpt to 4,000 characters or fewer. Your pasted text has been kept in full."
+              : error}
+          </div>
+        )}
+        {report && (
+          <section
+            className="rr-results"
+            ref={results}
+            aria-label="Analysis results"
+          >
+            <div className="rr-results-heading">
+              <div>
+                <h2>Your review</h2>
+                <p>
+                  {report.findings.length} requirements identified ·{" "}
+                  {report.findings.filter((f) => f.status !== "covered").length}{" "}
+                  to review · {report.elapsedSeconds}s
+                </p>
+              </div>
+              <button className="rr-secondary" onClick={exportReport}>
+                Export results
+              </button>
+            </div>
+            <p className="rr-caveat">
+              AI draft, not a compliance verdict. “Covered” compares written
+              controls only; it does not prove they operate effectively.
+            </p>
+            {report.warnings.map((warning, index) => (
+              <p className="rr-warning" key={index}>
+                {warning}
+              </p>
+            ))}
+            <label className="rr-filter">
+              <input
+                type="checkbox"
+                checked={gapsOnly}
+                onChange={(e) => setGapsOnly(e.target.checked)}
+              />{" "}
+              Show only items to review
+            </label>
+            {shown.length === 0 && (
+              <p className="rr-no-results">
+                {report.findings.length
+                  ? "No items in this filter. Turn it off to review the matched controls."
+                  : "The model did not identify verifiable requirements. Try a more specific policy excerpt."}
+              </p>
+            )}
+            {shown.map((finding, index) => (
+              <article className="rr-finding" key={`${index}-${finding.title}`}>
+                <div className="rr-finding-heading">
+                  <h3>{finding.title}</h3>
+                  <span className={`rr-badge ${finding.status}`}>
+                    {labels[finding.status]}
+                  </span>
+                </div>
+                <p className="rr-reason">{finding.reason}</p>
+                <div className="rr-evidence">
+                  <div>
+                    <h4>Policy evidence</h4>
+                    {finding.policyQuote ? (
+                      <blockquote>{finding.policyQuote}</blockquote>
+                    ) : (
+                      <p className="rr-muted">
+                        Could not verify the model’s policy quote.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <h4>Control evidence</h4>
+                    {finding.controlQuote ? (
+                      <blockquote>{finding.controlQuote}</blockquote>
+                    ) : (
+                      <p className="rr-muted">
+                        {finding.status === "gap"
+                          ? "No matching control identified in the supplied text."
+                          : "No verified control quote. Review the source."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {finding.nextStep && (
+                  <p className="rr-next-step">
+                    <strong>Suggested next step</strong> {finding.nextStep}
+                  </p>
+                )}
+                <small className="rr-evidence-status">
+                  {finding.evidenceVerified
+                    ? "Displayed quotes verified against your inputs"
+                    : "Evidence check incomplete — do not rely on this assessment"}
+                </small>
+              </article>
+            ))}
+          </section>
+        )}
+        <footer className="rr-footer">
+          Ollama + LangChain · Short excerpts, up to 10 requirements per run ·
+          Verify findings before use
+        </footer>
+      </main>
+    </div>
+  );
 }

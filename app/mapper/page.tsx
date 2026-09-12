@@ -3,8 +3,11 @@ import Mapper from "./Mapper";
 import "./mapper.css";
 
 export const metadata: Metadata = {
-  title: "Control Match Lab · Regulatory Radar",
-  description: "An interactive policy-to-control mapping and auditor review prototype.",
+  title: "Policy checker · Regulatory Radar",
+  description:
+    "Compare policy requirements and existing controls using a local AI model.",
 };
 
-export default function MapperPage() { return <Mapper />; }
+export default function MapperPage() {
+  return <Mapper />;
+}
