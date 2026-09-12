@@ -1,0 +1,3 @@
+SYNTHETIC QA POLICY - not a regulatory document
+REQ-100: The IAM team must review privileged access quarterly and retain signed evidence.
+REQ-101: The security team must retain security logs for 365 days.

@@ -1,0 +1,3 @@
+id,title,description,domain,owner
+IAM-07,Privileged access review,"The IAM team reviews privileged access annually and retains signed evidence.",Access management,IAM team
+SEC-01,Log retention,"The security team retains security logs for 90 days.",Cybersecurity,SOC
