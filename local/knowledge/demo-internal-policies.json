@@ -1,0 +1,33 @@
+[
+  {
+    "id": "demo-kyc", "title": "Customer identity and review policy", "owner": "Demo Compliance Team", "demo": true,
+    "versions": [
+      { "version": "2.0", "date": "2026-09-01", "sections": [
+        { "id": "KYC-01", "title": "Identity verification", "text": "Before opening an account, the onboarding team must verify the customer's identity and retain the verification evidence. Electronic identity verification must use the approved e-KYC service. Exceptions require Compliance approval before activation." },
+        { "id": "KYC-02", "title": "Customer review frequency", "text": "High-risk customer files must be reviewed at least every 12 months. Other customer files must be reviewed at least every 36 months. A material change in identity, ownership or risk triggers an additional review." },
+        { "id": "KYC-03", "title": "e-KYC oversight", "text": "The Board receives a quarterly report on e-KYC exceptions and performance. This sample policy does not specify Board approval of the overall e-KYC risk appetite and internal framework." }
+      ] },
+      { "version": "1.0", "date": "2026-06-01", "sections": [
+        { "id": "KYC-01", "title": "Identity verification", "text": "Before opening an account, the onboarding team must verify the customer's identity and retain the verification evidence. Electronic identity verification must use the approved e-KYC service." },
+        { "id": "KYC-02", "title": "Customer review frequency", "text": "High-risk customer files must be reviewed at least every 24 months. Other customer files must be reviewed at least every 36 months." },
+        { "id": "KYC-03", "title": "e-KYC oversight", "text": "Compliance receives an annual report on e-KYC exceptions and performance. This sample policy does not specify Board approval of the overall e-KYC risk appetite and internal framework." }
+      ] }
+    ]
+  },
+  {
+    "id": "demo-access", "title": "Privileged access and cybersecurity policy", "owner": "Demo IT Security Team", "demo": true,
+    "versions": [{ "version": "1.0", "date": "2026-08-15", "sections": [
+      { "id": "IT-01", "title": "Authentication", "text": "All privileged accounts must use multi-factor authentication. Shared administrator accounts are not permitted unless an approved emergency-access procedure records the individual user and reason." },
+      { "id": "IT-02", "title": "Access review", "text": "System owners must review privileged access every 90 days and keep a record of approvals and removals. Access for departing employees must be revoked on their last working day." },
+      { "id": "IT-03", "title": "Evidence retention", "text": "Privileged-access review records must be retained for two years. The IT Security Team owns this sample policy and reviews it annually." }
+    ] }]
+  },
+  {
+    "id": "demo-incidents", "title": "Security incident escalation policy", "owner": "Demo Security Operations Team", "demo": true,
+    "versions": [{ "version": "1.0", "date": "2026-08-20", "sections": [
+      { "id": "INC-01", "title": "Internal escalation", "text": "Employees must report suspected security incidents to the Security Operations Team within one hour of discovery. The team must record the discovery time, affected systems and immediate containment actions." },
+      { "id": "INC-02", "title": "External reporting", "text": "Compliance determines whether an incident requires external reporting after reviewing the applicable source requirements. This sample policy does not define a BNM reporting deadline." },
+      { "id": "INC-03", "title": "Review and ownership", "text": "The Security Operations Team must complete a lessons-learned review within ten working days after incident closure and assign owners to corrective actions." }
+    ] }]
+  }
+]

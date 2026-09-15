@@ -7,10 +7,13 @@
   },
   "scripts": {
     "local": "npm run build:local && node local/server.mjs",
+    "local:background": "npm run build:local && powershell.exe -NoProfile -File local/background.ps1",
+    "local:stop": "powershell.exe -NoProfile -File local/background.ps1 -Stop",
     "local:dev": "node local/server.mjs --dev",
     "build:local": "vite build --config local/vite.config.mjs",
-    "test:local": "node --test tests/local-analysis.test.mjs",
+    "test:local": "node --test tests/local-analysis.test.mjs tests/local-connection.test.mjs tests/radar.test.mjs tests/radar-chat.test.mjs tests/chat-window.test.mjs tests/kyc.test.mjs",
     "test:local:live": "node tests/local-live.mjs",
+    "test:kyc:live": "node tests/kyc-live.mjs",
     "typecheck:local": "tsc --noEmit -p local/tsconfig.json",
     "dev": "vinext dev",
     "build": "vinext build",
@@ -23,6 +26,7 @@
   "dependencies": {
     "@langchain/core": "^1.2.11",
     "@langchain/ollama": "^1.3.0",
+    "cheerio": "^1.2.0",
     "drizzle-orm": "0.45.2",
     "pdfjs-dist": "^6.3.289",
     "react": "19.2.6",
@@ -55,7 +59,8 @@
     "wrangler": "4.92.0"
   },
   "overrides": {
-    "ws": "8.21.3"
+    "ws": "8.21.3",
+    "undici": "7.29.0"
   },
   "type": "module"
 }

@@ -1,0 +1,51 @@
+.rd-monitor .rd-main { padding-top: 26px; }
+.rd-monitor .rd-intro { margin-bottom: 15px; }
+.rd-monitor .rd-intro h1 { font-size: 30px; }
+.rd-monitor .rd-steps { padding: 5px 0 18px; margin-bottom: 20px; }
+.rd-monitor .rd-welcome { padding: 42px 36px; }
+.rd-monitor .rd-welcome h2 { font-size: 30px; line-height: 1.3; }
+.rd-monitor .rd-reader { min-height: 460px; }
+.rd-review-fields { border: 0; margin: 0; min-width: 0; }
+.rd-session-drafts { margin-top: 20px; padding: 16px 20px; border: 1px solid #dce5eb; border-radius: 8px; background: white; color: #3e5969; font-size: 14px; }
+.rd-session-drafts p { font-size: 13px; margin-top: 10px; color: #687c88; }
+.rd-session-drafts > div { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 0; border-top: 1px solid #e7edef; }
+.rd-session-drafts > div > span { flex: 1; min-width: 180px; }
+.rd-session-drafts small { display: block; margin-top: 4px; color: #788993; }
+.rd-monitor .rd-section-title { align-items: flex-start; flex-wrap: wrap; }
+.rd-monitor .rd-section-title h3 { font-size: 21px; }
+.rd-update-filter { display: flex; gap: 8px; align-items: center; margin: 13px 0 0; font-size: 14px; color: #4e6572; }
+.rd-update-filter input { accent-color: #315c72; width: 16px; height: 16px; }
+.rd-topic-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 14px; color: #365263; }
+.rd-topic-filters, .rd-tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.rd-topic-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 6px 9px; border: 1px solid #d6e0e6; border-radius: 7px; background: #fff; color: #3c5767; font-size: 14px; line-height: 1.4; cursor: pointer; text-align: left; }
+.rd-topic-chip span { font-size: 12px; color: #687f8d; font-variant-numeric: tabular-nums; }
+.rd-topic-chip:hover { background: #f0f5f8; border-color: #92aabb; }
+.rd-topic-chip[aria-pressed="true"] { background: #fff5bd; color: #263c49; border-color: #bd9410; box-shadow: inset 0 0 0 1px #bd9410; font-weight: 650; }
+.rd-topic-chip:focus-visible { outline: 3px solid #2c76a5; outline-offset: 2px; }
+.rd-topic-help { margin: 10px 0 0; font-size: 13px; color: #667d89; line-height: 1.5; }
+.rd-more-topics { margin-top: 10px; font-size: 14px; color: #3c5767; }
+.rd-more-topics summary { cursor: pointer; padding: 3px 0; }
+.rd-more-topics[open] .rd-topic-filters { margin-top: 10px; }
+.rd-monitor .rd-tag-row .rd-publication-tag { padding: 3px 7px; background: #edf3f6; color: #3e5c6e; border-radius: 4px; font-size: 14px; line-height: 1.4; }
+.rd-document-tags { margin: 0 0 14px; }
+.rd-baseline { padding: 16px 18px; background: #f2f6f8; border: 1px solid #dce5ea; border-radius: 8px; margin-bottom: 24px; }
+.rd-baseline strong { font-size: 15px; color: #3a5564; }
+.rd-baseline p { color: #5c717d; font-size: 14px; margin: 5px 0 0; }
+.rd-baseline button { margin-top: 8px; }
+.rd-question-label { display: block; font-weight: 650; font-size: 14px; margin: 16px 0 6px; color: #37596b; }
+.rd-monitor textarea { display: block; width: 100%; border: 1px solid #cbd7df; padding: 12px; border-radius: 6px; background: #fff; color: #243a47; resize: vertical; font-size: 16px; line-height: 1.6; }
+.rd-monitor .rd-question-edit { background: #f7fafc; }
+.rd-field-label { display: block; font-size: 14px; font-weight: 650; color: #3f5664; margin: 0 0 8px; }
+.rd-field-label small { display: block; font-size: 12px; color: #76858d; font-weight: 400; margin-top: 4px; }
+.rd-monitor select { max-width: 100%; min-width: 140px; padding: 9px 12px; border: 1px solid #c9d6df; border-radius: 6px; font-size: 14px; background: white; color: #324d5d; }
+.rd-note-area { border-top: 1px solid #e3e9ed; padding-top: 22px; margin-top: 26px; }
+.rd-version-dates, .rd-version-diff { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; margin: 18px 0; }
+.rd-version-dates span { color: #6b7c86; font-size: 13px; }.rd-version-dates strong { display: block; color: #3c5665; font-size: 14px; margin-bottom: 4px; }
+.rd-version-diff > div { min-width: 0; }.rd-version-diff h4 { font-size: 15px; margin: 0 0 8px; }
+.rd-source-text, .rd-version-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 15px; line-height: 1.75; max-height: 550px; overflow-y: auto; background: #f7f9fa; padding: 17px; border: 1px solid #e0e7eb; border-radius: 7px; }
+.rd-version-diff pre { font-size: 14px; }
+.rd-review-note pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 15px; line-height: 1.8; padding: 20px; background: #f7fafb; border: 1px solid #dee6eb; margin-top: 18px; }
+.rd-monitor .rd-footer p { font-size: 13px; margin: 4px 0 0; }
+.rd-monitor .rd-footer strong { font-size: 14px; }
+@media (max-width: 850px) { .rd-monitor .rd-workspace { grid-template-columns: 1fr; }.rd-monitor .rd-feed-list { max-height: 360px; }.rd-monitor .rd-steps { gap: 12px; flex-wrap: wrap; }.rd-monitor .rd-intro { align-items: flex-start; }.rd-monitor .rd-scan { text-align: left; } }
+@media (max-width: 600px) { .rd-monitor .rd-main { padding: 22px 16px; }.rd-monitor .rd-intro h1 { font-size: 27px; }.rd-monitor .rd-welcome { padding: 28px 22px; }.rd-monitor .rd-welcome h2 { font-size: 25px; }.rd-monitor .rd-reader-nav { padding-inline: 12px; }.rd-monitor .rd-reader-nav button { font-size: 13px; padding-inline: 9px; }.rd-version-dates, .rd-version-diff { grid-template-columns: 1fr; }.rd-monitor .rd-steps i { display: none; } }

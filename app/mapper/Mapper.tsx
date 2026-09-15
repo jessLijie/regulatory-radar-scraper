@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readPolicy } from "./read-policy";
+import { analysisErrorMessage, readConnection, unavailableConnection } from "./local-connection.mjs";
 
 type Finding = {
   title: string;
@@ -20,7 +21,7 @@ type Report = {
   controlsHash: string;
   warnings: string[];
 };
-type Connection = { ready: boolean; model: string; message: string };
+type Connection = { ready: boolean; serverAvailable?: boolean; model: string; message: string };
 const labels = {
   covered: "Covered on paper",
   partial: "Partial match",
@@ -48,32 +49,36 @@ export default function Mapper() {
   const [report, setReport] = useState<Report | null>(null);
   const [gapsOnly, setGapsOnly] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const connectionAbort = useRef<AbortController | null>(null);
   const results = useRef<HTMLElement | null>(null);
 
-  async function checkConnection() {
+  const checkConnection = useCallback(async () => {
+    connectionAbort.current?.abort();
+    const controller = new AbortController();
+    connectionAbort.current = controller;
     try {
-      const response = await fetch("/api/local/status", {
-        signal: AbortSignal.timeout(5000),
-      });
-      if (
-        !response.ok ||
-        !response.headers.get("content-type")?.includes("application/json")
-      )
-        throw new Error();
-      setConnection(await response.json());
+      const status = await readConnection(window.location.hostname, controller.signal);
+      if (!controller.signal.aborted) setConnection(status);
     } catch {
-      setConnection({
-        ready: false,
-        model: "Ollama",
-        message:
-          "Open the local app with npm run local. This hosted page cannot connect to your computer’s model.",
-      });
+      // A newer check or component teardown cancelled this request.
     }
-  }
+  }, []);
   useEffect(() => {
     void checkConnection();
-    return () => abort.current?.abort();
-  }, []);
+    const refresh = () => {
+      if (!document.hidden) void checkConnection();
+    };
+    const timer = setInterval(refresh, 10_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      connectionAbort.current?.abort();
+      abort.current?.abort();
+    };
+  }, [checkConnection]);
   useEffect(() => {
     if (!busy) return;
     const start = Date.now();
@@ -154,10 +159,15 @@ export default function Mapper() {
       setError(
         controller.signal.aborted
           ? "Analysis cancelled. Your inputs are still here."
-          : e instanceof Error
-            ? e.message
-            : "Analysis failed.",
+          : analysisErrorMessage(e),
       );
+      if (!controller.signal.aborted) {
+        if (e instanceof TypeError) {
+          connectionAbort.current?.abort();
+          setConnection(unavailableConnection(window.location.hostname));
+        }
+        void checkConnection();
+      }
     } finally {
       setBusy(false);
       abort.current = null;
@@ -290,7 +300,7 @@ export default function Mapper() {
           ))}
         </div>
         <div className="rr-action-row">
-          <div className="rr-connection">
+          <div className="rr-connection" role="status" aria-live="polite">
             <span
               className={`rr-status-light ${connection.ready ? "ready" : ""}`}
             />
@@ -298,7 +308,9 @@ export default function Mapper() {
               <strong>
                 {connection.ready
                   ? `${connection.model} · Ready`
-                  : "Local model not ready"}
+                  : connection.serverAvailable === false
+                    ? "Local app unavailable"
+                    : "Local model not ready"}
               </strong>
               <p>
                 {connection.ready
